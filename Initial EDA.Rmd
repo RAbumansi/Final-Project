@@ -12,7 +12,7 @@ output: html_notebook
 *I will give an overview of the coffee industry, showing the importance of understanding the relationship between professional and consumer evaluations.*
 
 
-## 2. Packages and Data
+## 2. Packages and Data Intake
 
 ```{r}
 #load libraries

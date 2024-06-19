@@ -1,0 +1,267 @@
+---
+title: "Initial EDA"
+author: "Rayan Abumansi"
+date: "2024-06-18"
+output: html_notebook
+---
+
+## 1. Introduction and Background
+
+### Research Question: How are professional coffee scores (in points) related to consumer ratings/reviews and prices for coffee beans from different origins (countries)? 
+
+*I will give an overview of the coffee industry, showing the importance of understanding the relationship between professional and consumer evaluations.*
+
+
+## 2. Packages and Data
+
+```{r}
+#load libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+
+#load data
+
+#Data set 1
+coffee_quality <- read_csv("df_arabica_clean.csv")
+head(coffee_quality)
+
+#Data set 2
+coffee_reviews_price <- read_csv("reviews_feb_2023.csv")
+head(coffee_reviews_price)
+
+```
+
+## 3. Data Exploration
+
+### Data set 1: Coffee Quality Data
+
+*Purpose: The data is collected by the Coffee Quality Institute (CQI) to evaluate coffee quality using professional cupping scores.*
+
+
+
+```{r}
+#summary
+summary(coffee_quality)
+
+
+#histogram
+ggplot(coffee_quality, aes(x = `Total Cup Points`)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Distribution of Total Cup Points", x = "Total Cup Points", y = "Frequency")
+
+#check for missing values
+sum(is.na(coffee_quality))
+
+#Boxplot
+ggplot(coffee_quality, aes(y = `Total Cup Points`)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Total Cup Points", y = "Cup Points")
+
+```
+
+
+
+### Data set 2: Consumer Ratings and Reviews
+
+*Purpose: The data is collected from CoffeeReview.com, which summarizes consumer ratings and reviews.*
+
+```{r}
+summary(coffee_reviews_price)
+```
+
+
+## 4. Cleaning Data (Data set 2)
+
+*Data set 2 has a lot of (country of origin) regarding coffee and reviews, so I will only use ones that are available from the data set 1 to have better insights regarding coffee quality*
+
+```{r}
+#unique countries of origin from Data set 1
+countries_of_origin <- unique(coffee_quality$`Country of Origin`)
+
+#clean and filter from Dataset 2
+coffee_reviews_price_clean <- coffee_reviews_price %>%
+  mutate(coffee_origin = str_replace_all(coffee_origin, " ;", ",")) %>%
+  separate_rows(coffee_origin, sep = ",") %>%
+  mutate(coffee_origin = str_trim(coffee_origin)) %>%
+  filter(coffee_origin %in% countries_of_origin)
+
+unique(coffee_reviews_price_clean$coffee_origin)
+
+#In the price column from data set 2, price is not constant
+
+#filter out rows with prices not in USD
+coffee_reviews_price_clean <- coffee_reviews_price_clean %>%
+  filter(str_detect(est_price, "\\$")) %>%
+  mutate(est_price_numeric = as.numeric(gsub("[$,]", "", str_extract(est_price, "\\$[0-9,.]+"))))
+
+#remove NA values in est_price_numeric
+coffee_reviews_price_clean <- coffee_reviews_price_clean %>%
+  filter(!is.na(est_price_numeric))
+
+#remove extreme outliers
+coffee_reviews_price_clean <- coffee_reviews_price_clean %>%
+  filter(est_price_numeric < 1000)
+
+```
+
+
+```{r}
+#Histogram for Ratings
+ggplot(coffee_reviews_price, aes(x = rating)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Distribution of Consumer Ratings", x = "Rating", y = "Frequency")
+
+#check for missing values
+sum(is.na(coffee_reviews_price))
+
+#Boxplot for Ratings by Coffee Origin
+ggplot(coffee_reviews_price_clean, aes(x = `coffee_origin`, y = rating)) +
+  geom_boxplot() +
+  labs(title = "Consumer Ratings by Coffee Origin", x = "Coffee Origin", y = "Rating") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+
+## 5. Graphs and Further Analysis
+
+### Graph 1: Explore the relationship between Acidity of coffee and Total Cup Points from the data set 1
+
+```{r}
+ggplot(coffee_quality, aes(x = Acidity, y = `Total Cup Points`)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Cup Points and Acidity", x = "Acidity", y = "Cup Points")
+
+```
+
+### Graph 2: Distribution of Consumer Ratings by Origin from Dataset 2
+
+```{r}
+ggplot(coffee_reviews_price_clean, aes(x = rating, fill = coffee_origin)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  labs(title = "Consumer Ratings by Origin", x = "Rating", y = "Count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+### Graph 3: Estimated Price by Coffee Origin
+
+```{r}
+ggplot(coffee_reviews_price_clean, aes(x = coffee_origin, y = est_price_numeric)) +
+  geom_boxplot() +
+  labs(title = "Estimated Price by Coffee Origin", x = "Coffee Origin", y = "Estimated Price in USD") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+## 6. Joining Dataset and Final Plots
+
+```{r}
+#join data sets on the coffee origin
+combined_data <- coffee_quality %>%
+  inner_join(coffee_reviews_price_clean, by = c("Country of Origin" = "coffee_origin"))
+
+head(combined_data)
+
+```
+
+### 1. Scatter Plot: Cup Points vs Consumer Ratings
+
+```{r}
+ggplot(combined_data, aes(x = `Total Cup Points`, y = rating, color = `Country of Origin`, size = est_price_numeric)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "Cup Points and Consumer Ratings",
+       x = "Cup Points",
+       y = "Consumer Rating",
+       color = "Coffee Origin",
+       size = "Estimated Price (USD)") +
+  theme_minimal()
+
+```
+
+
+
+### 2. Box Plot: Consumer Ratings by Coffee Origin
+
+```{r}
+ggplot(combined_data, aes(x = `Country of Origin`, y = rating, fill = `Country of Origin`)) +
+  geom_boxplot() +
+  labs(title = "Consumer Ratings by Coffee Origin",
+       x = "Coffee Origin",
+       y = "Consumer Rating") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none")
+
+```
+
+
+
+### 3,  Box Plot: Price by Coffee Origin
+
+```{r}
+ggplot(combined_data, aes(x = `Country of Origin`, y = est_price_numeric, fill = `Country of Origin`)) +
+  geom_boxplot() +
+  labs(title = "Price by Coffee Origin",
+       x = "Coffee Origin",
+       y = "Price in USD") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none")
+```
+
+
+### 4. Combined Bar Plot for Average Consumer Ratings, Total Cup Points, and Estimated Prices
+
+```{r}
+avg_data_long <- avg_data %>%
+  pivot_longer(cols = c(avg_rating, avg_cup_points, avg_price),
+               names_to = "metric",
+               values_to = "value")
+
+ggplot(avg_data_long, aes(x = reorder(`Country of Origin`, value), y = value, fill = metric)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Average Consumer Ratings, Total Cup Points, and Estimated Prices by Coffee Origin",
+       x = "Coffee Origin",
+       y = "Average value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_fill_manual(values = c("avg_rating" = "skyblue", "avg_cup_points" = "lightgreen", "avg_price" = "orange"),
+                    name = "Metric",
+                    labels = c("Average Rating", "Average Cup Points", "Average Price in USD"))
+
+``` 
+
+
+## Conclusion
+This research and analysis explored the relationship between professional coffee scores (Total Cup Points), consumer ratings, and prices for coffee beans from different origins.
+
+### Total Cup Points and Consumer Ratings:
+The distribution of Total Cup Points shows that most coffee samples scored between 80 and 85 points.
+Consumer ratings are skewed to the higher end, with the majority of ratings are around 90 points.
+
+### Relationship Between Total Cup Points and Consumer Ratings:
+The scatter plot analysis I did shows that there is a positive relationship between (Total Cup Points) and (Consumer Ratings), indicating that higher "professional" scores matches with higher consumer ratings. However, the plot also shows a noticeable spread, suggesting that consumer ratings are affected by other factors beyond professional scores, such as individual preferences or brand reputation.
+
+### Estimated Price by Coffee Origin:
+The estimated price of coffee varies by origin, with some origins having much higher prices. Coffee from Taiwan tends to have higher average prices.
+
+There is no clear relationship between the price and the Total Cup Points or Consumer Ratings, showing that other factors like rarity, production costs and market demand play a role in the price.
+
+### Analysis of Coffee Origins:
+A comparison of average ratings, Total Cup Points, and prices for different coffee origins showing that some origins like Ethiopia and Colombia consistently perform well in both professional and consumer evaluations, but others like Taiwan are valued more for their high prices even though they have moderate ratings.
+
+This suggests that geographical branding and the market are impacting consumer choices and pricing.
+
+
+## Addressing the Research Question
+
+### Alignment Between Professional Scores and Consumer Ratings: 
+There is an alignment between professional scores and consumer ratings, indicating that higher quality coffee tested by professionals are more appreciated by consumers. However, the variability in consumer ratings suggests other factors also play a significant role.
+
+### Price:
+The price of coffee is not only associated with the quality. Instead, prices are influenced by a combination of factors including reputation, market, and possibly marketing.
+
